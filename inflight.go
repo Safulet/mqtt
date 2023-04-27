@@ -15,17 +15,17 @@ import (
 // Inflight is a map of InflightMessage keyed on packet id.
 type Inflight struct {
 	sync.RWMutex
-	internal            map[uint16]packets.Packet // internal contains the inflight packets
-	receiveQuota        int32                     // remaining inbound qos quota for flow control
-	sendQuota           int32                     // remaining outbound qos quota for flow control
-	maximumReceiveQuota int32                     // maximum allowed receive quota
-	maximumSendQuota    int32                     // maximum allowed send quota
+	internal            map[uint16]*packets.Packet // internal contains the inflight packets
+	receiveQuota        int32                      // remaining inbound qos quota for flow control
+	sendQuota           int32                      // remaining outbound qos quota for flow control
+	maximumReceiveQuota int32                      // maximum allowed receive quota
+	maximumSendQuota    int32                      // maximum allowed send quota
 }
 
 // NewInflights returns a new instance of an Inflight packets map.
 func NewInflights() *Inflight {
 	return &Inflight{
-		internal: map[uint16]packets.Packet{},
+		internal: map[uint16]*packets.Packet{},
 	}
 }
 
@@ -35,12 +35,12 @@ func (i *Inflight) Set(m packets.Packet) bool {
 	defer i.Unlock()
 
 	_, ok := i.internal[m.PacketID]
-	i.internal[m.PacketID] = m
+	i.internal[m.PacketID] = &m
 	return !ok
 }
 
 // Get returns an inflight packet by packet id.
-func (i *Inflight) Get(id uint16) (packets.Packet, bool) {
+func (i *Inflight) Get(id uint16) (*packets.Packet, bool) {
 	i.RLock()
 	defer i.RUnlock()
 
@@ -48,7 +48,7 @@ func (i *Inflight) Get(id uint16) (packets.Packet, bool) {
 		return m, true
 	}
 
-	return packets.Packet{}, false
+	return nil, false
 }
 
 // Len returns the size of the inflight messages map.
@@ -71,11 +71,11 @@ func (i *Inflight) Clone() *Inflight {
 }
 
 // GetAll returns all the inflight messages.
-func (i *Inflight) GetAll(immediate bool) []packets.Packet {
+func (i *Inflight) GetAll(immediate bool) []*packets.Packet {
 	i.RLock()
 	defer i.RUnlock()
 
-	m := []packets.Packet{}
+	m := []*packets.Packet{}
 	for _, v := range i.internal {
 		if !immediate || (immediate && v.Expiry < 0) {
 			m = append(m, v)
@@ -92,7 +92,7 @@ func (i *Inflight) GetAll(immediate bool) []packets.Packet {
 // NextImmediate returns the next inflight packet which is indicated to be sent immediately.
 // This typically occurs when the quota has been exhausted, and we need to wait until new quota
 // is free to continue sending.
-func (i *Inflight) NextImmediate() (packets.Packet, bool) {
+func (i *Inflight) NextImmediate() (*packets.Packet, bool) {
 	i.RLock()
 	defer i.RUnlock()
 
@@ -101,7 +101,7 @@ func (i *Inflight) NextImmediate() (packets.Packet, bool) {
 		return m[0], true
 	}
 
-	return packets.Packet{}, false
+	return nil, false
 }
 
 // Delete removes an in-flight message from the map. Returns true if the message existed.

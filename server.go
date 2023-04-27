@@ -605,7 +605,7 @@ func (s *Server) processPacket(cl *Client, pk packets.Packet) error {
 	if cl.State.Inflight.Len() > 0 && atomic.LoadInt32(&cl.State.Inflight.sendQuota) > 0 {
 		next, ok := cl.State.Inflight.NextImmediate()
 		if ok {
-			_ = cl.WritePacket(next)
+			_ = cl.WritePacket(*next)
 			if ok := cl.State.Inflight.Delete(next.PacketID); ok {
 				atomic.AddInt64(&s.Info.Inflight, -1)
 			}

@@ -41,7 +41,7 @@ func TestInflightGetAllAndImmediate(t *testing.T) {
 	cl.State.Inflight.Set(packets.Packet{PacketID: 4, Created: 4, Expiry: -1})
 	cl.State.Inflight.Set(packets.Packet{PacketID: 5, Created: 5})
 
-	require.Equal(t, []packets.Packet{
+	require.Equal(t, []*packets.Packet{
 		{PacketID: 1, Created: 1},
 		{PacketID: 2, Created: 2},
 		{PacketID: 3, Created: 3, Expiry: -1},
@@ -49,7 +49,7 @@ func TestInflightGetAllAndImmediate(t *testing.T) {
 		{PacketID: 5, Created: 5},
 	}, cl.State.Inflight.GetAll(false))
 
-	require.Equal(t, []packets.Packet{
+	require.Equal(t, []*packets.Packet{
 		{PacketID: 3, Created: 3, Expiry: -1},
 		{PacketID: 4, Created: 4, Expiry: -1},
 	}, cl.State.Inflight.GetAll(true))
@@ -79,7 +79,7 @@ func TestInflightDelete(t *testing.T) {
 
 	r := cl.State.Inflight.Delete(3)
 	require.True(t, r)
-	require.Equal(t, uint16(0), cl.State.Inflight.internal[3].PacketID)
+	require.Nil(t, cl.State.Inflight.internal[3])
 
 	_, ok := cl.State.Inflight.Get(3)
 	require.False(t, ok)
@@ -182,14 +182,14 @@ func TestNextImmediate(t *testing.T) {
 
 	pk, ok := cl.State.Inflight.NextImmediate()
 	require.True(t, ok)
-	require.Equal(t, packets.Packet{PacketID: 3, Created: 3, Expiry: -1}, pk)
+	require.Equal(t, packets.Packet{PacketID: 3, Created: 3, Expiry: -1}, *pk)
 
 	r := cl.State.Inflight.Delete(3)
 	require.True(t, r)
 
 	pk, ok = cl.State.Inflight.NextImmediate()
 	require.True(t, ok)
-	require.Equal(t, packets.Packet{PacketID: 4, Created: 4, Expiry: -1}, pk)
+	require.Equal(t, packets.Packet{PacketID: 4, Created: 4, Expiry: -1}, *pk)
 
 	r = cl.State.Inflight.Delete(4)
 	require.True(t, r)

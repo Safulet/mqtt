@@ -291,15 +291,15 @@ func (cl *Client) ResendInflightMessages(force bool) error {
 			tk.FixedHeader.Dup = true // [MQTT-3.3.1-1] [MQTT-3.3.1-3]
 		}
 
-		cl.ops.hooks.OnQosPublish(cl, tk, tk.Created, 0)
-		err := cl.WritePacket(tk)
+		cl.ops.hooks.OnQosPublish(cl, *tk, tk.Created, 0)
+		err := cl.WritePacket(*tk)
 		if err != nil {
 			return err
 		}
 
 		if tk.FixedHeader.Type == packets.Puback || tk.FixedHeader.Type == packets.Pubcomp {
 			if ok := cl.State.Inflight.Delete(tk.PacketID); ok {
-				cl.ops.hooks.OnQosComplete(cl, tk)
+				cl.ops.hooks.OnQosComplete(cl, *tk)
 				atomic.AddInt64(&cl.ops.info.Inflight, -1)
 			}
 		}
@@ -314,7 +314,7 @@ func (cl *Client) ClearInflights(now, maximumExpiry int64) []uint16 {
 	for _, tk := range cl.State.Inflight.GetAll(false) {
 		if (tk.Expiry > 0 && tk.Expiry < now) || tk.Created+maximumExpiry < now {
 			if ok := cl.State.Inflight.Delete(tk.PacketID); ok {
-				cl.ops.hooks.OnQosDropped(cl, tk)
+				cl.ops.hooks.OnQosDropped(cl, *tk)
 				atomic.AddInt64(&cl.ops.info.Inflight, -1)
 				deleted = append(deleted, tk.PacketID)
 			}

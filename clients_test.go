@@ -247,7 +247,7 @@ func TestClientNextPacketIDInUse(t *testing.T) {
 func TestClientNextPacketIDExhausted(t *testing.T) {
 	cl, _, _ := newTestClient()
 	for i := uint32(1); i <= cl.ops.options.Capabilities.maximumPacketID; i++ {
-		cl.State.Inflight.internal[uint16(i)] = packets.Packet{PacketID: uint16(i)}
+		cl.State.Inflight.internal[uint16(i)] = &packets.Packet{PacketID: uint16(i)}
 	}
 
 	i, err := cl.NextPacketID()
@@ -259,14 +259,14 @@ func TestClientNextPacketIDExhausted(t *testing.T) {
 func TestClientNextPacketIDOverflow(t *testing.T) {
 	cl, _, _ := newTestClient()
 	for i := uint32(0); i < cl.ops.options.Capabilities.maximumPacketID; i++ {
-		cl.State.Inflight.internal[uint16(i)] = packets.Packet{}
+		cl.State.Inflight.internal[uint16(i)] = &packets.Packet{}
 	}
 
 	cl.State.packetID = uint32(cl.ops.options.Capabilities.maximumPacketID - 1)
 	i, err := cl.NextPacketID()
 	require.NoError(t, err)
 	require.Equal(t, cl.ops.options.Capabilities.maximumPacketID, i)
-	cl.State.Inflight.internal[uint16(cl.ops.options.Capabilities.maximumPacketID)] = packets.Packet{}
+	cl.State.Inflight.internal[uint16(cl.ops.options.Capabilities.maximumPacketID)] = &packets.Packet{}
 
 	cl.State.packetID = cl.ops.options.Capabilities.maximumPacketID
 	_, err = cl.NextPacketID()
