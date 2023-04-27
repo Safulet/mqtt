@@ -75,16 +75,16 @@ func (i *Inflight) GetAll(immediate bool) []*packets.Packet {
 	i.RLock()
 	defer i.RUnlock()
 
-	m := []*packets.Packet{}
+	var m []*packets.Packet
 	for _, v := range i.internal {
 		if !immediate || (immediate && v.Expiry < 0) {
 			m = append(m, v)
 		}
 	}
 
-	sort.Slice(m, func(i, j int) bool {
-		return uint16(m[i].Created) < uint16(m[j].Created)
-	})
+	//sort.Slice(m, func(i, j int) bool {
+	//	return uint16(m[i].Created) < uint16(m[j].Created)
+	//})
 
 	return m
 }
@@ -97,6 +97,11 @@ func (i *Inflight) NextImmediate() (*packets.Packet, bool) {
 	defer i.RUnlock()
 
 	m := i.GetAll(true)
+
+	sort.Slice(m, func(i, j int) bool {
+		return uint16(m[i].Created) < uint16(m[j].Created)
+	})
+
 	if len(m) > 0 {
 		return m[0], true
 	}

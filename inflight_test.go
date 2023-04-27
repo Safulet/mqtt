@@ -5,6 +5,7 @@
 package mqtt
 
 import (
+	"sort"
 	"sync/atomic"
 	"testing"
 
@@ -41,18 +42,26 @@ func TestInflightGetAllAndImmediate(t *testing.T) {
 	cl.State.Inflight.Set(packets.Packet{PacketID: 4, Created: 4, Expiry: -1})
 	cl.State.Inflight.Set(packets.Packet{PacketID: 5, Created: 5})
 
+	inflightPackets := cl.State.Inflight.GetAll(false)
+	sort.Slice(inflightPackets, func(i, j int) bool {
+		return uint16(inflightPackets[i].Created) < uint16(inflightPackets[j].Created)
+	})
 	require.Equal(t, []*packets.Packet{
 		{PacketID: 1, Created: 1},
 		{PacketID: 2, Created: 2},
 		{PacketID: 3, Created: 3, Expiry: -1},
 		{PacketID: 4, Created: 4, Expiry: -1},
 		{PacketID: 5, Created: 5},
-	}, cl.State.Inflight.GetAll(false))
+	}, inflightPackets)
 
+	inflightPackets = cl.State.Inflight.GetAll(true)
+	sort.Slice(inflightPackets, func(i, j int) bool {
+		return uint16(inflightPackets[i].Created) < uint16(inflightPackets[j].Created)
+	})
 	require.Equal(t, []*packets.Packet{
 		{PacketID: 3, Created: 3, Expiry: -1},
 		{PacketID: 4, Created: 4, Expiry: -1},
-	}, cl.State.Inflight.GetAll(true))
+	}, inflightPackets)
 }
 
 func TestInflightLen(t *testing.T) {
