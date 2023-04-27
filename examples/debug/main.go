@@ -10,10 +10,10 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/mochi-co/mqtt/v2"
-	"github.com/mochi-co/mqtt/v2/hooks/auth"
-	"github.com/mochi-co/mqtt/v2/hooks/debug"
-	"github.com/mochi-co/mqtt/v2/listeners"
+	"github.com/Safulet/mqtt"
+	"github.com/Safulet/mqtt/hooks/auth"
+	"github.com/Safulet/mqtt/hooks/debug"
+	"github.com/Safulet/mqtt/listeners"
 	"github.com/rs/zerolog"
 )
 

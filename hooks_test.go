@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mochi-co/mqtt/v2/hooks/storage"
-	"github.com/mochi-co/mqtt/v2/packets"
-	"github.com/mochi-co/mqtt/v2/system"
+	"github.com/Safulet/mqtt/hooks/storage"
+	"github.com/Safulet/mqtt/packets"
+	"github.com/Safulet/mqtt/system"
 
 	"github.com/stretchr/testify/require"
 )

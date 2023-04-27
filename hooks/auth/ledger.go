@@ -9,8 +9,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/mochi-co/mqtt/v2"
-	"github.com/mochi-co/mqtt/v2/packets"
+	"github.com/Safulet/mqtt"
+	"github.com/Safulet/mqtt/packets"
 	"gopkg.in/yaml.v3"
 )
 

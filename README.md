@@ -3,8 +3,8 @@
 
 ![build status](https://github.com/mochi-co/mqtt/actions/workflows/build.yml/badge.svg) 
 [![Coverage Status](https://coveralls.io/repos/github/mochi-co/mqtt/badge.svg?branch=master&v2)](https://coveralls.io/github/mochi-co/mqtt?branch=master)
-[![Go Report Card](https://goreportcard.com/badge/github.com/mochi-co/mqtt)](https://goreportcard.com/report/github.com/mochi-co/mqtt/v2)
-[![Go Reference](https://pkg.go.dev/badge/github.com/mochi-co/mqtt.svg)](https://pkg.go.dev/github.com/mochi-co/mqtt/v2)
+[![Go Report Card](https://goreportcard.com/badge/github.com/mochi-co/mqtt)](https://goreportcard.com/report/github.com/Safulet/mqtt)
+[![Go Reference](https://pkg.go.dev/badge/github.com/mochi-co/mqtt.svg)](https://pkg.go.dev/github.com/Safulet/mqtt)
 [![contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)](https://github.com/mochi-co/mqtt/issues)
 
 </p>
@@ -21,7 +21,7 @@ Version 2.0.0 takes all the great things we loved about Mochi MQTT v1.0.0, learn
 
 Don't forget to use the new v2 import paths:
 ```go
-import "github.com/mochi-co/mqtt/v2"
+import "github.com/Safulet/mqtt"
 ```
 
 - Full MQTTv5 Feature Compliance, compatibility for MQTT v3.1.1 and v3.0.0:
@@ -85,9 +85,9 @@ Importing Mochi MQTT as a package requires just a few lines of code to get start
 import (
   "log"
 
-  "github.com/mochi-co/mqtt/v2"
-  "github.com/mochi-co/mqtt/v2/hooks/auth"
-  "github.com/mochi-co/mqtt/v2/listeners"
+  "github.com/Safulet/mqtt"
+  "github.com/Safulet/mqtt/hooks/auth"
+  "github.com/Safulet/mqtt/listeners"
 )
 
 func main() {
