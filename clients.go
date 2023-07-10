@@ -273,7 +273,7 @@ func (cl *Client) NextPacketID() (i uint32, err error) {
 
 		i++
 
-		if _, ok := cl.State.Inflight.Get(uint16(i)); !ok {
+		if !cl.State.Inflight.Exist(uint16(i)) {
 			atomic.StoreUint32(&cl.State.packetID, i)
 			return i, nil
 		}
