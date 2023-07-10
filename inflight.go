@@ -5,8 +5,6 @@
 package mqtt
 
 import (
-	"github.com/Safulet/mqtt/util"
-	"math"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -23,14 +21,14 @@ type Inflight struct {
 	maximumReceiveQuota int32                      // maximum allowed receive quota
 	maximumSendQuota    int32                      // maximum allowed send quota
 
-	pkIDMap *util.Bitmap
+	//pkIDMap *util.Bitmap
 }
 
 // NewInflights returns a new instance of an Inflight packets map.
 func NewInflights() *Inflight {
 	return &Inflight{
 		internal: map[uint16]*packets.Packet{},
-		pkIDMap:  util.NewBitmap(math.MaxUint16),
+		//pkIDMap:  util.NewBitmap(math.MaxUint16),
 	}
 }
 
@@ -42,7 +40,7 @@ func (i *Inflight) Set(m packets.Packet) bool {
 	_, ok := i.internal[m.PacketID]
 	i.internal[m.PacketID] = &m
 
-	i.pkIDMap.Set(int(m.PacketID))
+	//i.pkIDMap.Set(int(m.PacketID))
 	return !ok
 }
 
@@ -58,12 +56,12 @@ func (i *Inflight) Get(id uint16) (*packets.Packet, bool) {
 	return nil, false
 }
 
-func (i *Inflight) Exist(id uint16) bool {
-	i.RLock()
-	defer i.RUnlock()
-
-	return i.pkIDMap.Get(int(id))
-}
+//func (i *Inflight) Exist(id uint16) bool {
+//	i.RLock()
+//	defer i.RUnlock()
+//
+//	return i.pkIDMap.Get(int(id))
+//}
 
 // Len returns the size of the inflight messages map.
 func (i *Inflight) Len() int {
@@ -82,7 +80,7 @@ func (i *Inflight) Clone() *Inflight {
 		c.internal[k] = v
 	}
 
-	c.pkIDMap = i.pkIDMap.Clone()
+	//c.pkIDMap = i.pkIDMap.Clone()
 
 	return c
 }
@@ -134,7 +132,7 @@ func (i *Inflight) Delete(id uint16) bool {
 	_, ok := i.internal[id]
 	delete(i.internal, id)
 
-	i.pkIDMap.Delete(int(id))
+	//i.pkIDMap.Delete(int(id))
 
 	return ok
 }
@@ -177,4 +175,20 @@ func (i *Inflight) IncreaseSendQuota() {
 func (i *Inflight) ResetSendQuota(n int32) {
 	atomic.StoreInt32(&i.sendQuota, n)
 	atomic.StoreInt32(&i.maximumSendQuota, n)
+}
+
+func (i *Inflight) Stats() interface{} {
+	stat := struct {
+		SendQuota    int32
+		RecvQuota    int32
+		MaxSendQuota int32
+		MaxRecvQuota int32
+	}{
+		SendQuota:    i.sendQuota,
+		RecvQuota:    i.receiveQuota,
+		MaxSendQuota: i.maximumSendQuota,
+		MaxRecvQuota: i.maximumReceiveQuota,
+	}
+
+	return stat
 }
