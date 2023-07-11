@@ -36,9 +36,9 @@ func main() {
 			{
 				// user melon can read and write to their own topic
 				Username: "melon", Filters: auth.Filters{
-				"melon/#":   auth.ReadWrite,
-				"updates/#": auth.WriteOnly, // can write to updates, but can't read updates from others
-			},
+					"melon/#":   auth.ReadWrite,
+					"updates/#": auth.WriteOnly, // can write to updates, but can't read updates from others
+				},
 			},
 			{
 				// Otherwise, no clients have publishing permissions

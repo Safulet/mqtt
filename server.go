@@ -35,7 +35,7 @@ var (
 	DefaultServerCapabilities = &Capabilities{
 		MaximumSessionExpiryInterval: math.MaxUint32, // maximum number of seconds to keep disconnected sessions
 		MaximumMessageExpiryInterval: 60 * 60 * 24,   // maximum message expiry if message expiry is 0 or over
-		ReceiveMaximum:               1024,           // maximum number of concurrent qos messages per client
+		ReceiveMaximum:               32,             // maximum number of concurrent qos messages per client, like max inflight window size
 		MaximumQos:                   2,              // maxmimum qos value available to clients
 		RetainAvailable:              1,              // retain messages is available
 		MaximumPacketSize:            0,              // no maximum packet size
@@ -464,7 +464,7 @@ func (s *Server) inheritClientSession(pk packets.Packet, cl *Client) bool {
 			cl.State.Inflight = existing.State.Inflight.Clone() // [MQTT-3.1.2-5]
 			if cl.State.Inflight.maximumReceiveQuota == 0 && cl.ops.options.Capabilities.ReceiveMaximum != 0 {
 				cl.State.Inflight.ResetReceiveQuota(int32(cl.ops.options.Capabilities.ReceiveMaximum)) // server receive max per client
-				cl.State.Inflight.ResetSendQuota(int32(cl.Properties.Props.ReceiveMaximum))            // client receive max
+				cl.State.Inflight.ResetSendQuota(int32(cl.ops.options.Capabilities.ReceiveMaximum))    // client receive max
 			}
 		}
 
@@ -602,16 +602,30 @@ func (s *Server) processPacket(cl *Client, pk packets.Packet) error {
 		return err
 	}
 
-	//if cl.State.Inflight.Len() > 0 && atomic.LoadInt32(&cl.State.Inflight.sendQuota) > 0 {
-	//	next, ok := cl.State.Inflight.NextImmediate()
-	//	if ok {
-	//		_ = cl.WritePacket(*next)
-	//		if ok := cl.State.Inflight.Delete(next.PacketID); ok {
-	//			atomic.AddInt64(&s.Info.Inflight, -1)
-	//		}
-	//		cl.State.Inflight.DecreaseSendQuota()
-	//	}
-	//}
+	// 当client发过来packet时，说明网络通了，此时可以开始从waitqueue中拿出消息进行发送&记录到inflight window
+	// 从队列中取出来生成packetID&发送&记录到inflight
+	sendQuota := atomic.LoadInt32(&cl.State.Inflight.sendQuota)
+	if cl.State.WaitSendQueue.Len() > 0 && 0 < sendQuota && atomic.LoadInt32(&cl.State.Inflight.maximumSendQuota) > 0 {
+		next, ok := cl.State.WaitSendQueue.Dequeue().(*packets.Packet)
+		if ok && next != nil {
+			i, pkIDErr := cl.NextPacketID() // [MQTT-4.3.2-1] [MQTT-4.3.3-1]
+			if pkIDErr != nil {
+				s.Log.Warn().Err(pkIDErr).Str("client", cl.ID).Str("listener", cl.Net.Listener).Msg("packet ids exhausted")
+				return nil
+			}
+
+			next.PacketID = uint16(i) // [MQTT-2.2.1-4]
+
+			if ok = cl.State.Inflight.Set(*next); ok { // [MQTT-4.3.2-3] [MQTT-4.3.3-3]
+				atomic.AddInt64(&s.Info.Inflight, 1)
+				s.hooks.OnQosPublish(cl, *next, next.Created, 0)
+				s.Log.Warn().Str("client", cl.ID).Uint16("packetID", next.PacketID).Msg("decrease send quota")
+				cl.State.Inflight.DecreaseSendQuota()
+			}
+
+			_ = cl.WritePacket(*next)
+		}
+	}
 
 	return nil
 }
@@ -823,45 +837,63 @@ func (s *Server) publishToClient(cl *Client, sub packets.Subscription, pk packet
 		}
 	}
 
+	// 进入队列
+	// 从队列获取发出，如果qos >0，看看inflight是否有发送余额，有的话获取packetID&发送&记录一下，没有就返回
+	var next *packets.Packet
 	if out.FixedHeader.Qos > 0 {
-		i, err := cl.NextPacketID() // [MQTT-4.3.2-1] [MQTT-4.3.3-1]
-		if err != nil {
-			s.Log.Warn().Err(err).Str("client", cl.ID).Str("listener", cl.Net.Listener).Msg("packet ids exhausted")
+		// 先在queue中存下来，先看看有没有发送余额，有就从queue中取出来，生成packet id（此时inflight map比max packet id小很多，不用遍历很多次），然后发送&记录到inflight中
+		// 获取余额---发送packet这一段代码会有竞争，不是完全并发安全对，会出现有余额，但是检查余额过后但是inflight window实际已经被撑爆了，这种时候不会太多&积累
+		if !cl.State.WaitSendQueue.Enqueue(&out) {
+			s.Log.Warn().Err(packets.ErrQuotaExceeded).Str("client", cl.ID).Str("listener", cl.Net.Listener).Msg("wait send queue is full")
 			return out, packets.ErrQuotaExceeded
 		}
 
-		out.PacketID = uint16(i) // [MQTT-2.2.1-4]
 		sentQuota := atomic.LoadInt32(&cl.State.Inflight.sendQuota)
-
-		if ok := cl.State.Inflight.Set(out); ok { // [MQTT-4.3.2-3] [MQTT-4.3.3-3]
-			atomic.AddInt64(&s.Info.Inflight, 1)
-			s.hooks.OnQosPublish(cl, out, out.Created, 0)
-			cl.State.Inflight.DecreaseSendQuota()
-		}
-
-		if sentQuota == 0 && atomic.LoadInt32(&cl.State.Inflight.maximumSendQuota) > 0 {
-			out.Expiry = -1
-			cl.State.Inflight.Set(out)
+		if sentQuota <= 0 || atomic.LoadInt32(&cl.State.Inflight.maximumSendQuota) <= 0 {
+			s.Log.Warn().Err(packets.ErrQuotaExceeded).Str("client", cl.ID).Int32("sendQuota", sentQuota).Int32("maxSendQuota", cl.State.Inflight.maximumSendQuota).Msg("no send quota")
 			return out, nil
 		}
+		next = cl.State.WaitSendQueue.Dequeue().(*packets.Packet)
+		if next == nil {
+			s.Log.Warn().Str("client", cl.ID).Msg("wait queue is empty")
+			return out, nil
+		}
+
+		// NextPacketID失败直接返回会造成packet丢失
+		i, err := cl.NextPacketID() // [MQTT-4.3.2-1] [MQTT-4.3.3-1]
+		if err != nil {
+			s.Log.Warn().Err(err).Str("client", cl.ID).Str("listener", cl.Net.Listener).Msg("packet ids exhausted")
+			return *next, packets.ErrPacketIdExhausted
+		}
+
+		next.PacketID = uint16(i) // [MQTT-2.2.1-4]
+
+		if ok := cl.State.Inflight.Set(*next); ok { // [MQTT-4.3.2-3] [MQTT-4.3.3-3]
+			atomic.AddInt64(&s.Info.Inflight, 1)
+			s.hooks.OnQosPublish(cl, *next, next.Created, 0)
+			s.Log.Warn().Str("client", cl.ID).Uint16("packetID", next.PacketID).Msg("decrease send quota")
+			cl.State.Inflight.DecreaseSendQuota()
+		}
+	} else {
+		next = &out
 	}
 
 	if cl.Net.Conn == nil || atomic.LoadUint32(&cl.State.done) == 1 {
-		return out, packets.CodeDisconnect
+		return *next, packets.CodeDisconnect
 	}
 
 	select {
-	case cl.State.outbound <- &out:
+	case cl.State.outbound <- next:
 		atomic.AddInt32(&cl.State.outboundQty, 1)
 	default:
 		atomic.AddInt64(&s.Info.MessagesDropped, 1)
-		cl.ops.hooks.OnPublishDropped(cl, pk)
-		cl.State.Inflight.Delete(out.PacketID) // packet was dropped due to irregular circumstances, so rollback inflight.
+		cl.ops.hooks.OnPublishDropped(cl, *next)
+		cl.State.Inflight.Delete(next.PacketID) // packet was dropped due to irregular circumstances, so rollback inflight.
 		cl.State.Inflight.IncreaseSendQuota()
-		return out, packets.ErrPendingClientWritesExceeded
+		return *next, packets.ErrPendingClientWritesExceeded
 	}
 
-	return out, nil
+	return *next, nil
 }
 
 func (s *Server) publishRetainedToClient(cl *Client, sub packets.Subscription, existed bool) {

@@ -8,6 +8,7 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"github.com/Safulet/mqtt/util"
 	"io"
 	"net"
 	"sync"
@@ -138,6 +139,7 @@ type ClientState struct {
 	TopicAliases  TopicAliases         // a map of topic aliases
 	stopCause     atomic.Value         // reason for stopping
 	Inflight      *Inflight            // a map of in-flight qos messages
+	WaitSendQueue *util.Queue          // a queue of wait for sending to client
 	Subscriptions *Subscriptions       // a map of the subscription filters a client maintains
 	disconnected  int64                // the time the client disconnected in unix time, for calculating expiry
 	outbound      chan *packets.Packet // queue for pending outbound packets
@@ -155,6 +157,7 @@ func newClient(c net.Conn, o *ops) *Client {
 	cl := &Client{
 		State: ClientState{
 			Inflight:      NewInflights(),
+			WaitSendQueue: util.NewQueue(100000),
 			Subscriptions: NewSubscriptions(),
 			TopicAliases:  NewTopicAliases(o.options.Capabilities.TopicAliasMaximum),
 			keepalive:     defaultKeepalive,
@@ -202,7 +205,8 @@ func (cl *Client) ParseConnect(lid string, pk packets.Packet) {
 	cl.Properties.Props = pk.Properties.Copy(false)
 
 	cl.State.Inflight.ResetReceiveQuota(int32(cl.ops.options.Capabilities.ReceiveMaximum)) // server receive max per client
-	cl.State.Inflight.ResetSendQuota(int32(cl.Properties.Props.ReceiveMaximum))            // client receive max
+	cl.State.Inflight.ResetSendQuota(int32(cl.ops.options.Capabilities.ReceiveMaximum))    // client receive max
+	cl.ops.log.Warn().Str("client", cl.ID).Uint16("packet.ReceiveMaximum", pk.Properties.ReceiveMaximum).Uint16("cl.Properties.Props.ReceiveMaximum", cl.Properties.Props.ReceiveMaximum).Msg("parse connect client")
 
 	cl.State.TopicAliases.Outbound = NewOutboundTopicAliases(cl.Properties.Props.TopicAliasMaximum)
 
@@ -262,7 +266,7 @@ func (cl *Client) NextPacketID() (i uint32, err error) {
 	overflowed := false
 	for {
 		if overflowed && i == started {
-			return 0, packets.ErrQuotaExceeded
+			return 0, packets.ErrPacketIdExhausted
 		}
 
 		if i >= cl.ops.options.Capabilities.maximumPacketID {
@@ -273,7 +277,7 @@ func (cl *Client) NextPacketID() (i uint32, err error) {
 
 		i++
 
-		if !cl.State.Inflight.Exist(uint16(i)) {
+		if _, ok := cl.State.Inflight.Get(uint16(i)); !ok {
 			atomic.StoreUint32(&cl.State.packetID, i)
 			return i, nil
 		}

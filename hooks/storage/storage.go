@@ -176,7 +176,7 @@ func (d *Subscription) UnmarshalBinary(data []byte) error {
 // SystemInfo is a storable representation of the system information values.
 type SystemInfo struct {
 	system.Info        // embed the system info struct
-	T           string `json:"t"` // the data type
+	T           string `json:"t"`             // the data type
 	ID          string `json:"id" storm:"id"` // the storage key
 }
 
