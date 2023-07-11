@@ -147,7 +147,7 @@ type ClientState struct {
 	isTakenOver   uint32               // used to identify orphaned clients
 	packetID      uint32               // the current highest packetID
 	done          uint32               // atomic counter which indicates that the client has closed
-	outboundQty   int32                // number of messages currently in the outbound queue
+	OutboundQty   int32                // number of messages currently in the outbound queue
 	keepalive     uint16               // the number of seconds the connection can wait
 }
 
@@ -157,7 +157,7 @@ func newClient(c net.Conn, o *ops) *Client {
 	cl := &Client{
 		State: ClientState{
 			Inflight:      NewInflights(),
-			WaitSendQueue: util.NewQueue(100000),
+			WaitSendQueue: util.NewQueue(10000),
 			Subscriptions: NewSubscriptions(),
 			TopicAliases:  NewTopicAliases(o.options.Capabilities.TopicAliasMaximum),
 			keepalive:     defaultKeepalive,
@@ -191,7 +191,7 @@ func (cl *Client) WriteLoop() {
 		if err := cl.WritePacket(*pk); err != nil {
 			cl.ops.log.Debug().Err(err).Str("client", cl.ID).Interface("packet", pk).Msg("failed publishing packet")
 		}
-		atomic.AddInt32(&cl.State.outboundQty, -1)
+		atomic.AddInt32(&cl.State.OutboundQty, -1)
 	}
 }
 
@@ -206,7 +206,7 @@ func (cl *Client) ParseConnect(lid string, pk packets.Packet) {
 
 	cl.State.Inflight.ResetReceiveQuota(int32(cl.ops.options.Capabilities.ReceiveMaximum)) // server receive max per client
 	cl.State.Inflight.ResetSendQuota(int32(cl.ops.options.Capabilities.ReceiveMaximum))    // client receive max
-	cl.ops.log.Warn().Str("client", cl.ID).Uint16("packet.ReceiveMaximum", pk.Properties.ReceiveMaximum).Uint16("cl.Properties.Props.ReceiveMaximum", cl.Properties.Props.ReceiveMaximum).Msg("parse connect client")
+	//cl.ops.log.Warn().Str("client", cl.ID).Uint16("packet.ReceiveMaximum", pk.Properties.ReceiveMaximum).Uint16("cl.Properties.Props.ReceiveMaximum", cl.Properties.Props.ReceiveMaximum).Msg("parse connect client")
 
 	cl.State.TopicAliases.Outbound = NewOutboundTopicAliases(cl.Properties.Props.TopicAliasMaximum)
 

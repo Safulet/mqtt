@@ -1546,7 +1546,7 @@ func TestPublishToClientExceedClientWritesPending(t *testing.T) {
 
 	for i := int32(0); i < cl.ops.options.Capabilities.MaximumClientWritesPending; i++ {
 		cl.State.outbound <- new(packets.Packet)
-		atomic.AddInt32(&cl.State.outboundQty, 1)
+		atomic.AddInt32(&cl.State.OutboundQty, 1)
 	}
 
 	_, err := s.publishToClient(cl, packets.Subscription{Filter: "a/b/c", Qos: 2}, packets.Packet{})

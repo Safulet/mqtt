@@ -606,7 +606,12 @@ func (s *Server) processPacket(cl *Client, pk packets.Packet) error {
 	// 从队列中取出来生成packetID&发送&记录到inflight
 	sendQuota := atomic.LoadInt32(&cl.State.Inflight.sendQuota)
 	if cl.State.WaitSendQueue.Len() > 0 && 0 < sendQuota && atomic.LoadInt32(&cl.State.Inflight.maximumSendQuota) > 0 {
-		next, ok := cl.State.WaitSendQueue.Dequeue().(*packets.Packet)
+		topOut := cl.State.WaitSendQueue.Dequeue()
+		if topOut == nil {
+			return nil
+		}
+
+		next, ok := topOut.(*packets.Packet)
 		if ok && next != nil {
 			i, pkIDErr := cl.NextPacketID() // [MQTT-4.3.2-1] [MQTT-4.3.3-1]
 			if pkIDErr != nil {
@@ -619,7 +624,7 @@ func (s *Server) processPacket(cl *Client, pk packets.Packet) error {
 			if ok = cl.State.Inflight.Set(*next); ok { // [MQTT-4.3.2-3] [MQTT-4.3.3-3]
 				atomic.AddInt64(&s.Info.Inflight, 1)
 				s.hooks.OnQosPublish(cl, *next, next.Created, 0)
-				s.Log.Warn().Str("client", cl.ID).Uint16("packetID", next.PacketID).Msg("decrease send quota")
+				//s.Log.Warn().Str("client", cl.ID).Uint16("packetID", next.PacketID).Msg("decrease send quota")
 				cl.State.Inflight.DecreaseSendQuota()
 			}
 
@@ -840,6 +845,7 @@ func (s *Server) publishToClient(cl *Client, sub packets.Subscription, pk packet
 	// 进入队列
 	// 从队列获取发出，如果qos >0，看看inflight是否有发送余额，有的话获取packetID&发送&记录一下，没有就返回
 	var next *packets.Packet
+	var ok bool
 	if out.FixedHeader.Qos > 0 {
 		// 先在queue中存下来，先看看有没有发送余额，有就从queue中取出来，生成packet id（此时inflight map比max packet id小很多，不用遍历很多次），然后发送&记录到inflight中
 		// 获取余额---发送packet这一段代码会有竞争，不是完全并发安全对，会出现有余额，但是检查余额过后但是inflight window实际已经被撑爆了，这种时候不会太多&积累
@@ -853,9 +859,16 @@ func (s *Server) publishToClient(cl *Client, sub packets.Subscription, pk packet
 			s.Log.Warn().Err(packets.ErrQuotaExceeded).Str("client", cl.ID).Int32("sendQuota", sentQuota).Int32("maxSendQuota", cl.State.Inflight.maximumSendQuota).Msg("no send quota")
 			return out, nil
 		}
-		next = cl.State.WaitSendQueue.Dequeue().(*packets.Packet)
-		if next == nil {
+
+		topOut := cl.State.WaitSendQueue.Dequeue()
+		if topOut == nil {
 			s.Log.Warn().Str("client", cl.ID).Msg("wait queue is empty")
+			return out, nil
+		}
+
+		next, ok = topOut.(*packets.Packet)
+		if !ok || next == nil {
+			s.Log.Warn().Str("client", cl.ID).Msg("top packet in wait send queue is invalid")
 			return out, nil
 		}
 
@@ -871,7 +884,7 @@ func (s *Server) publishToClient(cl *Client, sub packets.Subscription, pk packet
 		if ok := cl.State.Inflight.Set(*next); ok { // [MQTT-4.3.2-3] [MQTT-4.3.3-3]
 			atomic.AddInt64(&s.Info.Inflight, 1)
 			s.hooks.OnQosPublish(cl, *next, next.Created, 0)
-			s.Log.Warn().Str("client", cl.ID).Uint16("packetID", next.PacketID).Msg("decrease send quota")
+			//s.Log.Warn().Str("client", cl.ID).Uint16("packetID", next.PacketID).Msg("decrease send quota")
 			cl.State.Inflight.DecreaseSendQuota()
 		}
 	} else {
@@ -884,7 +897,7 @@ func (s *Server) publishToClient(cl *Client, sub packets.Subscription, pk packet
 
 	select {
 	case cl.State.outbound <- next:
-		atomic.AddInt32(&cl.State.outboundQty, 1)
+		atomic.AddInt32(&cl.State.OutboundQty, 1)
 	default:
 		atomic.AddInt64(&s.Info.MessagesDropped, 1)
 		cl.ops.hooks.OnPublishDropped(cl, *next)
