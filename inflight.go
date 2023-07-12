@@ -192,3 +192,23 @@ func (i *Inflight) Stats() interface{} {
 
 	return stat
 }
+
+func (i *Inflight) SendQuota() int32 {
+	return i.sendQuota
+}
+
+func (i *Inflight) RecvQuota() int32 {
+	return i.receiveQuota
+}
+
+func (i *Inflight) MaxSendQuota() int32 {
+	return i.maximumSendQuota
+}
+
+func (i *Inflight) MaxRecvQuota() int32 {
+	return i.maximumReceiveQuota
+}
+
+func (i *Inflight) LenWithoutLock() int {
+	return len(i.internal)
+}
