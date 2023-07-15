@@ -134,6 +134,7 @@ type Packet struct {
 	SessionPresent  bool          // session existed for connack
 	ReasonCode      byte          // reason code for a packet response (acks, etc)
 	ReservedBit     byte          // reserved, do not use (except in testing)
+	InjectTime      int64         // inject time for inline client
 }
 
 // Mods specifies certain values required for certain mqtt v5 compliance within packet encoding/decoding.
@@ -209,6 +210,7 @@ func (pk *Packet) Copy(allowTransfer bool) Packet {
 		Created:        pk.Created,
 		Expiry:         pk.Expiry,
 		Origin:         pk.Origin,
+		InjectTime:     pk.InjectTime,
 	}
 
 	if allowTransfer {
